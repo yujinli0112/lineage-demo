@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>表级血缘中心</title>
+    <style>
+        :root{
+            --bg:#f7f8fb; --card:#fff; --line:#e8e9ef; --text:#1f2328;
+            --green:#7ac26d; --green-dark:#4d9b3f;
+        }
+        *{ box-sizing:border-box; }
+        body{ margin:0; background:var(--bg); color:var(--text); font-family:Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+        header{ height:56px; display:flex; align-items:center; padding:0 16px; border-bottom:1px solid var(--line); background:#fff; }
+        header h1{ font-size:16px; margin:0; font-weight:600; }
+        .layout{ display:grid; grid-template-columns:320px 1fr; height:calc(100vh - 56px); }
+        .left{ border-right:1px solid var(--line); background:#fff; display:flex; flex-direction:column; }
+        .pane-title{ padding:12px 14px; font-weight:600; }
+        .search{ padding: 0 14px 10px 14px; }
+        .search input{ width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:10px; outline:none; }
+        .list{ overflow:auto; padding:0 8px 16px 8px; }
+        .item{ background:var(--card); border:1px solid var(--line); margin:8px; padding:10px 12px; border-radius:12px; cursor:pointer; }
+        .item:hover{ border-color:#cdd0d8; background:#fafbff; }
+        .tags{ font-size:12px; color:#667085; margin-top:6px; display:flex; gap:8px; }
+        .right{ position:relative; }
+        #cy{ position:absolute; inset:0; }
+        .toolbar{ position:absolute; right:12px; top:12px; display:flex; gap:8px; z-index:10; }
+        .btn{ background:#fff; border:1px solid var(--line); border-radius:10px; padding:8px 10px; cursor:pointer; }
+        .btn:hover{ background:#fafbff; }
+        .drawer{ position:absolute; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--line); padding:12px; display:grid; grid-template-columns:1fr auto; gap:12px; }
+        textarea{ width:100%; height:120px; border:1px solid var(--line); border-radius:10px; padding:10px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+        .legend{ position:absolute; left:12px; top:12px; z-index:10; background:#fff; border:1px solid var(--line); border-radius:10px; padding:8px 10px; font-size:12px; }
+        .legend .dot{ display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:middle; }
+    </style>
+    <script src="https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.umd.js"></script>
+    <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
+    <script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
+</head>
+<body>
+<header><h1>表级血缘中心</h1></header>
+<div class="layout">
+    <div class="left">
+        <div class="pane-title">所有表</div>
+        <div class="search"><input id="kw" placeholder="搜索表名..."/></div>
+        <div class="list" id="tableList"></div>
+    </div>
+    <div class="right">
+        <div class="legend">
+            <div><span class="dot" style="background:var(--green)"></span>表 / 视图</div>
+        </div>
+        <div class="toolbar">
+            <button class="btn" id="btnFit">自适应</button>
+            <button class="btn" id="btnDepth">深度: 2</button>
+        </div>
+        <div id="cy"></div>
+        <div class="drawer">
+            <textarea id="sql" placeholder="在此粘贴 SQL，然后点击【解析并入库】"></textarea>
+            <button class="btn" id="parseSave">解析并入库</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    cytoscape.use(window.cytoscapeDagre);
+    const cy = cytoscape({
+        container: document.getElementById('cy'),
+        wheelSensitivity: 0.2,
+        style: [
+            { selector: 'node', style: {
+                    'shape':'round-rectangle','background-color':'#7ac26d','border-color':'#4d9b3f','border-width':1,
+                    'label':'data(label)','text-wrap':'wrap','text-max-width':180,'color':'#0f2a0f','font-weight':600,
+                    'padding':'10px','width':'label','height':'label'
+                }},
+            { selector: 'edge', style: {
+                    'curve-style':'bezier','target-arrow-shape':'triangle','width':2,'line-color':'#d0d3dc','target-arrow-color':'#d0d3dc'
+                }}
+        ]
+    });
+
+    let currentDepth = 2;
+    document.getElementById('btnDepth').onclick = () => {
+        currentDepth = currentDepth === 2 ? 3 : (currentDepth === 3 ? 1 : 2);
+        document.getElementById('btnDepth').innerText = '深度: ' + currentDepth;
+    };
+    document.getElementById('btnFit').onclick = () => { cy.fit(null, 30); };
+
+    async function loadTables(){
+        const kw = document.getElementById('kw').value.trim();
+        const res = await fetch('/api/tables' + (kw ? ('?kw=' + encodeURIComponent(kw)) : ''));
+        const list = await res.json();
+        const box = document.getElementById('tableList');
+        box.innerHTML = '';
+        list.forEach(t => {
+            const div = document.createElement('div');
+            div.className = 'item';
+            div.innerHTML = `<div style="font-weight:600">${t.name}</div>
+                     <div class="tags"><span>${t.type}</span><span>in:${t.inDegree}</span><span>out:${t.outDegree}</span></div>`;
+            div.onclick = () => { loadGraph(t.name); };
+            box.appendChild(div);
+        });
+    }
+    document.getElementById('kw').addEventListener('input', () => { loadTables(); });
+
+    async function loadGraph(center){
+        const res = await fetch('/api/graph?center=' + encodeURIComponent(center) + '&depth=' + currentDepth);
+        const g = await res.json();
+
+        const els = [];
+        const ids = new Set();
+        g.nodes.forEach(n => {
+            if (!ids.has(n.id)) {
+                ids.add(n.id);
+                els.push({ data:{ id:n.id, label:n.label || n.id } });
+            }
+        });
+        g.edges.forEach(e => {
+            els.push({ data:{ id:e.source + '->' + e.target, source:e.source, target:e.target } });
+        });
+
+        cy.elements().remove();
+        cy.add(els);
+        cy.layout({ name: 'dagre', rankDir: 'LR', nodeSep: 40, rankSep: 80 }).run();
+        cy.fit(null, 40);
+    }
+
+    document.getElementById('parseSave').onclick = async () => {
+        const sql = document.getElementById('sql').value.trim();
+        if (!sql){ alert('请先粘贴 SQL'); return; }
+        const res = await fetch('/api/lineage/parse-save', {
+            method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sql })
+        });
+        if (!res.ok){ alert('解析失败：' + await res.text()); return; }
+        const r = await res.json();
+        alert('已入库，runId=' + r.runId + '；请在左侧列表点选表查看关系');
+        loadTables();
+    };
+
+    loadTables();
+</script>
+</body>
+</html>
