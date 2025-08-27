@@ -46,8 +46,6 @@ public class LineageController {
     @GetMapping(path="/graph", produces = MediaType.APPLICATION_JSON_VALUE)
     public GraphDTO graphFor(@RequestParam("center") String center,
                              @RequestParam(name="depth", required = false) Integer depth) {
-        // 默认10，最多50，防爆图
-        int d = (depth == null ? 10 : Math.max(1, Math.min(depth, 50)));
-        return persistenceService.subgraphFor(center, d);
+        return persistenceService.subgraphFor(center);
     }
 }

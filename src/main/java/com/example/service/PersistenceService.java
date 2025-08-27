@@ -92,68 +92,127 @@ public class PersistenceService {
         return out;
     }
 
-    /** 以某个表为中心（默认 10 层，含逆向/正向）并插入“过程节点” */
-    // PersistenceService.java
+    /**
+     * 生成以指定表为中心的子图（包含正向和逆向关系）
+     * @param center 中心节点的表名
+     * @return 包含子图节点和边信息的GraphDTO对象
+     */
     @Transactional(readOnly = true)
-    public GraphDTO subgraphFor(String center, int depth) {
+    public GraphDTO subgraphFor(String center) {
+        // 1. 从数据库获取所有边数据（包含关联的节点信息）
         List<EdgeEntity> all = edgeRepo.findAllWithNodes();
 
+        // 2. 构建邻接表：创建两个映射来存储正向和逆向关系
+        // 存储每个节点的出边（指向的节点）
         Map<String, Set<String>> out = new HashMap<>();
+        // 存储每个节点的入边（指向该节点的节点）
         Map<String, Set<String>> in  = new HashMap<>();
+
+        // 3. 遍历所有边，填充邻接表
         for (EdgeEntity e : all) {
+            // 获取源节点名称
             String s = e.getSource().getName();
+            // 获取目标节点名称
             String t = e.getTarget().getName();
-            if (!out.containsKey(s)) { out.put(s, new LinkedHashSet<>()); }
+
+            // 处理正向关系 (s -> t)
+            if (!out.containsKey(s)) {
+                // 如果源节点尚未记录，初始化其出边集合
+                out.put(s, new LinkedHashSet<>());
+            }
+            // 将目标节点添加到源节点的出边集合中
             out.get(s).add(t);
-            if (!in.containsKey(t)) { in.put(t, new LinkedHashSet<>()); }
+
+            // 处理逆向关系 (t <- s)
+            if (!in.containsKey(t)) {
+                // 如果目标节点尚未记录，初始化其入边集合
+                in.put(t, new LinkedHashSet<>());
+            }
+            // 将源节点添加到目标节点的入边集合中
             in.get(t).add(s);
         }
 
-        // 以 center 为核心做双向 BFS（depth 层）
+        // 4. 以center为核心进行双向BFS，探索指定深度内的所有相关节点
+        // 存储需要保留的节点集合（按探索顺序）
         Set<String> keep = new LinkedHashSet<>();
+        // BFS队列，用于按层探索节点
         Deque<String> q = new ArrayDeque<>();
+        // 将中心节点添加到保留集合
         keep.add(center);
+        // 将中心节点加入队列，作为BFS的起点
         q.add(center);
-        int level = 0;
-        while (!q.isEmpty() && level < depth) {
+
+        // 5. 执行BFS：当队列不为空且未达到指定深度时继续探索
+        while (!q.isEmpty()) {
+            // 记录当前层的节点数量
             int size = q.size();
+            // 遍历当前层的所有节点
             for (int i = 0; i < size; i++) {
+                // 从队列中取出一个节点
                 String u = q.poll();
+
+                // 正向探索：遍历当前节点的所有出边（指向的节点）
                 for (String v : out.getOrDefault(u, Set.of())) {
+                    // 如果目标节点尚未在保留集合中
                     if (!keep.contains(v)) {
+                        // 将其添加到保留集合
                         keep.add(v);
+                        // 并将其加入队列，以便后续探索
                         q.add(v);
                     }
                 }
+
+                // 逆向探索：遍历当前节点的所有入边（指向该节点的节点）
                 for (String v : in.getOrDefault(u, Set.of())) {
+                    // 如果源节点尚未在保留集合中
                     if (!keep.contains(v)) {
+                        // 将其添加到保留集合
                         keep.add(v);
+                        // 并将其加入队列，以便后续探索
                         q.add(v);
                     }
                 }
             }
-            level++;
         }
 
-        // 只输出真实表/视图，直接连边；不再构造任何“过程/汇聚”节点
+        // 6. 构建子图数据：根据BFS得到的节点集合，筛选相关的边和节点
+        // 创建返回的DTO对象
         GraphDTO dto = new GraphDTO();
+        // 记录已添加到DTO的节点，避免重复添加
         Set<String> added = new HashSet<>();
+
+        // 7. 遍历所有边，筛选出至少一端在保留集合中的边
         for (EdgeEntity e : all) {
+            // 获取边的源节点
             String s = e.getSource().getName();
+            // 获取边的目标节点
             String t = e.getTarget().getName();
+
+            // 跳过两端都不在保留集合中的边（与子图无关的边）
             if (!keep.contains(s) && !keep.contains(t)) {
                 continue;
             }
+
+            // 8. 添加源节点到DTO（如果尚未添加）
             if (!added.contains(s)) {
-                dto.getNodes().add(new GraphDTO.Node(s, s, e.getSource().getType())); // table/view
+                // 创建节点对象：使用名称作为ID和标签，并包含节点类型信息
+                dto.getNodes().add(new GraphDTO.Node(s, s, e.getSource().getType()));
+                // 标记该节点已添加
                 added.add(s);
             }
+
+            // 9. 添加目标节点到DTO（如果尚未添加）
             if (!added.contains(t)) {
-                dto.getNodes().add(new GraphDTO.Node(t, t, e.getTarget().getType())); // table/view
+                dto.getNodes().add(new GraphDTO.Node(t, t, e.getTarget().getType()));
+                // 标记该节点已添加
                 added.add(t);
             }
+
+            // 10. 添加边到DTO（无论节点是否新添加，边都需要添加）
             dto.getEdges().add(new GraphDTO.Edge(s, t));
         }
+
+        // 11. 返回构建好的子图DTO
         return dto;
     }
 
