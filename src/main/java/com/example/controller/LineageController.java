@@ -23,11 +23,15 @@ public class LineageController {
         this.persistenceService = persistenceService;
     }
 
-    public record SqlPayload(String sql) {}
+    public static class SqlPayload {
+        private String sql;
+        public String getSql() { return sql; }
+        public void setSql(String sql) { this.sql = sql; }
+    }
 
     @PostMapping(path="/lineage/parse-save", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public Map<String, Object> parseAndSave(@RequestBody SqlPayload payload) throws Exception {
-        var r = lineageService.buildAndSave(payload.sql());
+        LineageService.ParseResult r = lineageService.buildAndSave(payload.getSql());
         Map<String, Object> out = new HashMap<>();
         out.put("saved", r.saved);
         out.put("message", r.message);

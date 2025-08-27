@@ -51,7 +51,7 @@ public class LineageService {
             stmts = engine.parseStatements(sql);
         } catch (Exception e) {
             // 如果标准解析失败，使用降级/兜底解析方法
-            var fb = engine.fallbackExtract(sql);
+            JSqlParserEngine.FallbackResult fb = engine.fallbackExtract(sql);
             int idx = 1;
 
             // 处理降级解析结果：如果有目标表，构建简单血缘关系
@@ -89,13 +89,13 @@ public class LineageService {
         // 正常解析路径：遍历每个SQL语句
         int stmtIndex = 0;
         for (Statement s : stmts) {
-            var targetOpt = engine.extractTargetTable(s);
+            Optional<String> targetOpt = engine.extractTargetTable(s);
 
             // 1) 先拿 AST 的来源表（会包含子查询/JOIN/逗号表列）
             Set<String> sources = engine.extractSourceTables(s);
 
             // 2) 再用兜底扫描器取并集（避免任何遗漏）
-            var fb = engine.fallbackExtract(s.toString());
+            JSqlParserEngine.FallbackResult fb = engine.fallbackExtract(s.toString());
             if (fb != null && fb.sources != null && !fb.sources.isEmpty()) {
                 if (sources == null || sources.isEmpty()) {
                     sources = new LinkedHashSet<>(fb.sources);

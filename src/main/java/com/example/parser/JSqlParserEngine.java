@@ -31,13 +31,15 @@ public class JSqlParserEngine {
     }
 
     public Optional<String> extractTargetTable(Statement stmt) {
-        if (stmt instanceof Insert ins) {
+        if (stmt instanceof Insert) {
+            Insert ins = (Insert) stmt;
             Table t = ins.getTable();
             if (t != null) {
                 return Optional.of(normalize(t.getFullyQualifiedName()));
             }
         }
-        if (stmt instanceof CreateTable ct) {
+        if (stmt instanceof CreateTable) {
+            CreateTable ct = (CreateTable) stmt;
             Select sel = ct.getSelect();
             if (sel != null && ct.getTable() != null) {
                 return Optional.of(normalize(ct.getTable().getFullyQualifiedName()));
@@ -49,14 +51,19 @@ public class JSqlParserEngine {
 
     public Set<String> extractSourceTables(Statement stmt) {
         Set<String> src = new LinkedHashSet<>();
-        if (stmt instanceof Insert ins) {
+        if (stmt instanceof Insert) {
+            Insert ins = (Insert) stmt;
             Select sel = ins.getSelect();
             if (sel != null) {
                 src.addAll(sourceFinder.getSourceTables(sel));
             }
-        } else if (stmt instanceof CreateTable ct && ct.getSelect() != null) {
-            src.addAll(sourceFinder.getSourceTables(ct.getSelect()));
-        } else if (stmt instanceof Select sel) {
+        } else if (stmt instanceof CreateTable) {
+            CreateTable ct = (CreateTable) stmt;
+            if (ct.getSelect() != null){
+                src.addAll(sourceFinder.getSourceTables(ct.getSelect()));
+            }
+        } else if (stmt instanceof Select) {
+            Select sel = (Select) stmt;
             src.addAll(sourceFinder.getSourceTables(sel));
         }
         return src;
@@ -86,8 +93,8 @@ public class JSqlParserEngine {
         public final Set<String> targets;
         public final Set<String> sources;
         public FallbackResult(Set<String> targets, Set<String> sources) {
-            this.targets = (targets == null ? Set.of() : targets);
-            this.sources = (sources == null ? Set.of() : sources);
+            this.targets = (targets == null ? Collections.<String>emptySet() : targets);
+            this.sources = (sources == null ? Collections.<String>emptySet() : sources);
         }
     }
 }

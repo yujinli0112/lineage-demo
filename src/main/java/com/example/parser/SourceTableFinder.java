@@ -20,7 +20,7 @@ public class SourceTableFinder {
     /** 返回规范化后的表名集合（会走完整 AST，覆盖子查询/JOIN/UNION 等） */
     public Set<String> getSourceTables(Select select) {
         if (select == null) {
-            return Set.of();
+            return Collections.<String>emptySet();
         }
         TablesNamesFinder finder = new TablesNamesFinder(); // JSqlParser 5.x
         List<String> names = finder.getTableList((Statement) select);
@@ -120,7 +120,8 @@ public class SourceTableFinder {
     }
 
     private List<String> toStringList(Object v) {
-        if (v instanceof List<?> list) {
+        if (v instanceof List<?>) {
+            List<?> list = (List<?>) v;
             List<String> out = new ArrayList<>();
             for (Object o : list) {
                 if (o != null) {
@@ -168,9 +169,10 @@ public class SourceTableFinder {
 
     @SuppressWarnings("unchecked")
     private void extractWithList(Set<String> names, Object list) {
-        if (!(list instanceof List<?> l)) {
+        if (!(list instanceof List<?>)) {
             return;
         }
+        List<?> l = (List<?>) list;
         for (Object wi : l) {
             String name = resolveWithItemName(wi);
             if (name != null) {
@@ -184,15 +186,21 @@ public class SourceTableFinder {
         try { // 4.x
             Method m = wi.getClass().getMethod("getName");
             Object v = m.invoke(wi);
-            if (v instanceof String s && !s.isEmpty()) {
-                return s;
+            if (v instanceof String ) {
+                String s = (String) v;
+                if(!s.isEmpty()) {
+                    return s;
+                }
             }
         } catch (Exception ignored) {}
         try { // 5.x
             Method m = wi.getClass().getMethod("getAliasName");
             Object v = m.invoke(wi);
-            if (v instanceof String s && !s.isEmpty()) {
-                return s;
+            if (v instanceof String) {
+                String s = (String) v;
+                if(!s.isEmpty()) {
+                    return s;
+                }
             }
         } catch (Exception ignored) {}
         try { // 5.x 另一条路径
@@ -201,8 +209,11 @@ public class SourceTableFinder {
             if (alias != null) {
                 Method m2 = alias.getClass().getMethod("getName");
                 Object v = m2.invoke(alias);
-                if (v instanceof String s && !s.isEmpty()) {
-                    return s;
+                if (v instanceof String) {
+                    String s = (String) v;
+                    if(!s.isEmpty()) {
+                        return s;
+                    }
                 }
             }
         } catch (Exception ignored) {}

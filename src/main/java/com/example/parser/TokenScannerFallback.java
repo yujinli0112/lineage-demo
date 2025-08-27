@@ -7,7 +7,7 @@ public class TokenScannerFallback {
     /** 兜底解析：返回【多个目标】与【来源表集合】 */
     public JSqlParserEngine.FallbackResult extract(String sql) {
         if (sql == null) {
-            return new JSqlParserEngine.FallbackResult(Set.of(), Set.of());
+            return new JSqlParserEngine.FallbackResult(Collections.<String>emptySet(), Collections.<String>emptySet());
         }
         String s = sql;
         String lower = s.toLowerCase(Locale.ROOT);

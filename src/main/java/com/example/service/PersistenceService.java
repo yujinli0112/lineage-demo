@@ -152,7 +152,7 @@ public class PersistenceService {
                 String u = q.poll();
 
                 // 正向探索：遍历当前节点的所有出边（指向的节点）
-                for (String v : out.getOrDefault(u, Set.of())) {
+                for (String v : out.getOrDefault(u, Collections.<String>emptySet())) {
                     // 如果目标节点尚未在保留集合中
                     if (!keep.contains(v)) {
                         // 将其添加到保留集合
@@ -163,7 +163,7 @@ public class PersistenceService {
                 }
 
                 // 逆向探索：遍历当前节点的所有入边（指向该节点的节点）
-                for (String v : in.getOrDefault(u, Set.of())) {
+                for (String v : in.getOrDefault(u, Collections.<String>emptySet())) {
                     // 如果源节点尚未在保留集合中
                     if (!keep.contains(v)) {
                         // 将其添加到保留集合
