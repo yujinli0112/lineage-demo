@@ -14,13 +14,24 @@ public class SqlPreprocessor {
     }
 
     public String preprocess(String sql) {
+        // 如果未启用 Hive 标准化，直接返回原始 SQL
         if (!enableHiveNormalization) {
             return sql;
         }
+
+        // 移除 SQL 中的注释
         String s = removeComments(sql);
+
+        // 移除 SQL 中的提示（如优化器提示）
         s = stripHints(s);
+
+        // 标准化 Hive 的 INSERT OVERWRITE 分区语法
         s = normalizeInsertOverwritePartition(s);
-        s = stripHiveOrderClauses(s); // DISTRIBUTE/SORT/CLUSTER BY
+
+        // 移除 Hive 特有的排序子句（DISTRIBUTE/SORT/CLUSTER BY）
+        s = stripHiveOrderClauses(s);
+
+        // 返回预处理后的 SQL
         return s;
     }
 

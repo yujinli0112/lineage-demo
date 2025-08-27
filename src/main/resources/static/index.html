@@ -129,11 +129,22 @@
         const res = await fetch('/api/lineage/parse-save', {
             method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sql })
         });
-        if (!res.ok){ alert('解析失败：' + await res.text()); return; }
+        if (!res.ok){
+            alert('解析失败：' + await res.text());
+            return;
+        }
         const r = await res.json();
-        alert('已入库，runId=' + r.runId + '；请在左侧列表点选表查看关系');
-        loadTables();
+        if (r.saved){
+            alert(`${r.message} runId=${r.runId}`);
+            // 入库后刷新左侧表清单
+            loadTables();
+        } else {
+            // 未入库时给出更友好提示；可把识别到的来源表也给用户看
+            const cnt = Array.isArray(r.nodes) ? r.nodes.length : 0;
+            alert(`${r.message} 识别到来源表 ${cnt} 张。`);
+        }
     };
+
 
     loadTables();
 </script>

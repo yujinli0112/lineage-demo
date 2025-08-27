@@ -25,16 +25,18 @@ public class LineageController {
 
     public record SqlPayload(String sql) {}
 
-    /** 解析 + 落库 */
     @PostMapping(path="/lineage/parse-save", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public Map<String, Object> parseAndSave(@RequestBody SqlPayload payload) throws Exception {
         var r = lineageService.buildAndSave(payload.sql());
         Map<String, Object> out = new HashMap<>();
+        out.put("saved", r.saved);
+        out.put("message", r.message);
         out.put("runId", r.runId);
         out.put("nodes", r.graph.getNodes());
         out.put("edges", r.graph.getEdges());
         return out;
     }
+
 
     /** 列出所有表（可带关键字） */
     @GetMapping(path="/tables", produces = MediaType.APPLICATION_JSON_VALUE)

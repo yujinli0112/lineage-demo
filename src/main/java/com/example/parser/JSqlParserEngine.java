@@ -20,8 +20,13 @@ public class JSqlParserEngine {
     }
 
     public List<Statement> parseStatements(String sql) throws Exception {
+        // 如果有预处理器，先对 SQL 进行预处理；否则直接使用原始 SQL
         String pre = preprocessor == null ? sql : preprocessor.preprocess(sql);
+
+        // 使用 CCJSqlParser 库解析预处理后的 SQL 字符串
         Statements statements = CCJSqlParserUtil.parseStatements(pre);
+
+        // 返回解析后的语句列表
         return statements.getStatements();
     }
 
