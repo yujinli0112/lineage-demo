@@ -7,9 +7,7 @@ import net.sf.jsqlparser.statement.create.table.CreateTable;
 import net.sf.jsqlparser.statement.insert.Insert;
 import org.springframework.stereotype.Service;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Service
 public class LineageService {
@@ -91,60 +89,64 @@ public class LineageService {
         // 正常解析路径：遍历每个SQL语句
         int stmtIndex = 0;
         for (Statement s : stmts) {
-            // 尝试从AST中提取目标表和源表
             var targetOpt = engine.extractTargetTable(s);
-            var sources = engine.extractSourceTables(s);
 
-            // 如果成功提取到目标表
+            // 1) 先拿 AST 的来源表（会包含子查询/JOIN/逗号表列）
+            Set<String> sources = engine.extractSourceTables(s);
+
+            // 2) 再用兜底扫描器取并集（避免任何遗漏）
+            var fb = engine.fallbackExtract(s.toString());
+            if (fb != null && fb.sources != null && !fb.sources.isEmpty()) {
+                if (sources == null || sources.isEmpty()) {
+                    sources = new LinkedHashSet<>(fb.sources);
+                } else {
+                    sources.addAll(fb.sources);
+                }
+            }
+
             if (targetOpt.isPresent()) {
                 stmtIndex++;
                 String tgt = targetOpt.get();
-                // 添加目标表节点
                 g.addNode(tgt);
 
-                // 根据语句类型设置标签
                 if (s instanceof Insert) {
                     stmtLabels.put(stmtIndex, "INSERT-SELECT-" + stmtIndex);
                 } else if (s instanceof CreateTable) {
-                    // CTAS = Create Table As Select
                     stmtLabels.put(stmtIndex, "CTAS-" + stmtIndex);
                 } else {
                     stmtLabels.put(stmtIndex, "STEP-" + stmtIndex);
                 }
 
-                // 如果AST解析未能提取到源表，使用降级方法
-                if (sources.isEmpty()) {
-                    var fb = engine.fallbackExtract(s.toString());
-                    sources.addAll(fb.sources);
-                }
-
-                // 为每个源表添加节点和边
-                for (String src : sources) {
-                    // 避免自环
-                    if (!tgt.equals(src)) {
-                        g.addNode(src);
-                        g.addEdge(src, tgt, stmtIndex);
+                if (sources != null) {
+                    for (String src : sources) {
+                        if (src != null && !tgt.equals(src)) {
+                            g.addNode(src);
+                            g.addEdge(src, tgt, stmtIndex);
+                        }
                     }
                 }
             } else {
-                // 该语句可能是不支持提取目标表的类型（如CREATE VIEW或Hive多INSERT）
-                var fb = engine.fallbackExtract(s.toString());
-                if (!fb.targets.isEmpty()) {
+                // 该语句可能是 CREATE VIEW/Hive 多 INSERT 等，尝试兜底是否有“目标”
+                if (fb != null && fb.targets != null && !fb.targets.isEmpty()) {
                     stmtIndex++;
                     stmtLabels.put(stmtIndex, "INSERT-SELECT-" + stmtIndex);
                     for (String tgt : fb.targets) {
                         g.addNode(tgt);
-                        for (String src : fb.sources) {
-                            if (!tgt.equals(src)) {
-                                g.addNode(src);
-                                g.addEdge(src, tgt, stmtIndex);
+                        if (sources != null) {
+                            for (String src : sources) {
+                                if (src != null && !tgt.equals(src)) {
+                                    g.addNode(src);
+                                    g.addEdge(src, tgt, stmtIndex);
+                                }
                             }
                         }
                     }
                 } else {
-                    // 如果没有目标表，只添加源表
-                    for (String src : sources) {
-                        g.addNode(src);
+                    // 纯 SELECT：只放来源节点即可
+                    if (sources != null) {
+                        for (String src : sources) {
+                            g.addNode(src);
+                        }
                     }
                 }
             }

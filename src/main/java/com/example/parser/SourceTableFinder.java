@@ -1,6 +1,8 @@
 package com.example.parser;
 
+import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.select.Select;
+import net.sf.jsqlparser.util.TablesNamesFinder;
 
 import java.lang.reflect.Method;
 import java.util.*;
@@ -15,9 +17,41 @@ import java.util.*;
 public class SourceTableFinder {
 
     /** 对外主入口：给一个 Select，返回来源表集合（已统一小写、去引号、排除 CTE 名） */
+    /** 返回规范化后的表名集合（会走完整 AST，覆盖子查询/JOIN/UNION 等） */
     public Set<String> getSourceTables(Select select) {
-        return getSourceTablesInternal(select);
+        if (select == null) {
+            return Set.of();
+        }
+        TablesNamesFinder finder = new TablesNamesFinder(); // JSqlParser 5.x
+        List<String> names = finder.getTableList((Statement) select);
+
+        Set<String> out = new LinkedHashSet<>();
+        for (String n : names) {
+            if (n == null) {
+                continue;
+            }
+            String norm = normalize(n);
+            if (isIgnorable(norm)) {
+                continue;
+            }
+            out.add(norm);
+        }
+        return out;
     }
+
+    private boolean isIgnorable(String n) {
+        if (n == null) {
+            return true;
+        }
+        String s = n.trim().toLowerCase(Locale.ROOT);
+        if (s.isEmpty()) {
+            return true;
+        }
+        // 需要的话可以在这里排除系统表
+        return "dual".equals(s);
+    }
+
+
 
     /** 也支持传 Statement 或 SQL 字符串（可选） */
     public Set<String> getSourceTablesFrom(Object stmtOrSql) {
@@ -176,16 +210,15 @@ public class SourceTableFinder {
     }
 
     /** 标准化：去引号 → 合并库表分隔 → 小写 */
-    private static String normalize(String name) {
-        if (name == null) {
-            return null;
-        }
+    private String normalize(String name) {
         String n = name.trim();
-        if ((n.startsWith("`") && n.endsWith("`")) || (n.startsWith("\"") && n.endsWith("\""))) {
-            n = n.substring(1, n.length()-1);
+        if (n.startsWith("`") && n.endsWith("`")) {
+            n = n.substring(1, n.length() - 1);
         }
-        n = n.replace("`.", ".").replace(".`", ".")
-                .replace("\".", ".").replace(".\"", ".");
+        if (n.startsWith("\"") && n.endsWith("\"")) {
+            n = n.substring(1, n.length() - 1);
+        }
+        n = n.replace("`.", ".").replace(".`", ".").replace("\".", ".").replace(".\"", ".");
         return n.toLowerCase(Locale.ROOT);
     }
 }
